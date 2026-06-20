@@ -1,7 +1,7 @@
 <?php
 // bot.php - Webhook Telegram pour commandes directes
 $botToken = '8507961561:AAFGiLtXzjIcR-j2IQuIDA55QZDQEYQFq_4';
-$chatId = '6767182328';
+$chatId = '8909427918';
 
 $content = file_get_contents('php://input');
 $update = json_decode($content, true);
