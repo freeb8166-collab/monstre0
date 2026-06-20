@@ -1,12 +1,9 @@
-FROM node:18-alpine
 
-WORKDIR /app
+FROM nginx:alpine
 
-# Copier tout le projet
-COPY . .
+# Copier tous les fichiers
+COPY . /usr/share/nginx/html
 
-# Exposer le port
-EXPOSE 3000
+EXPOSE 80
 
-# Démarrer avec index.js
-CMD ["node", "index.js"]
+CMD ["nginx", "-g", "daemon off;"]
