@@ -1,14 +1,4 @@
-FROM node:18-alpine
-
+FROM php:8.2-cli
 WORKDIR /app
-
-# Copier tous les fichiers
 COPY . .
-
-# Installer serve globalement
-RUN npm install -g serve
-
-EXPOSE 3000
-
-# Servir le dossier avec index.html comme page par défaut
-CMD ["serve", "-l", "3000", "--single"]
+CMD ["php", "-S", "0.0.0.0:10000"]
