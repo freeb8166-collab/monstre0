@@ -1,11 +1,18 @@
-FROM nginx:alpine
+FROM node:18-alpine
 
-# Copier tous les fichiers
-COPY . /usr/share/nginx/html
+WORKDIR /app
 
-# Utiliser login.html comme page par défaut
-RUN mv /usr/share/nginx/html/login.html /usr/share/nginx/html/index.html || true
+# Copier package.json si existant
+COPY package*.json ./
 
-EXPOSE 80
+# Installer les dépendances
+RUN npm install
 
-CMD ["nginx", "-g", "daemon off;"]
+# Copier tout le projet
+COPY . .
+
+# Exposer le port
+EXPOSE 3000
+
+# Démarrer avec index.js
+CMD ["node", "index.js"]
