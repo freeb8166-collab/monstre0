@@ -1,14 +1,5 @@
-FROM node:18-alpine
-
+FROM php:8.2-cli
 WORKDIR /app
-
-# Copier tous les fichiers
 COPY . .
-
-# Installer serve pour servir les fichiers statiques
-RUN npm install -g serve
-
 EXPOSE 10000
-
-# Servir les fichiers avec index.html par défaut
-CMD ["serve", "-l", "10000", "--single"]
+CMD ["php", "-S", "0.0.0.0:10000"]
