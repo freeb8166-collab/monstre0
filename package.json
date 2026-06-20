@@ -1,0 +1,14 @@
+{
+  "name": "instagram-clone",
+  "version": "1.0.0",
+  "description": "Application de démonstration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "author": "",
+  "license": "ISC"
+}
