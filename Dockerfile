@@ -1,9 +1,14 @@
+FROM node:18-alpine
 
-FROM nginx:alpine
+WORKDIR /app
 
 # Copier tous les fichiers
-COPY . /usr/share/nginx/html
+COPY . .
 
-EXPOSE 80
+# Installer serve globalement
+RUN npm install -g serve
 
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 3000
+
+# Servir le dossier avec index.html comme page par défaut
+CMD ["serve", "-l", "3000", "--single"]
