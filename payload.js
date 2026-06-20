@@ -2,7 +2,7 @@
 // CONFIGURATION TELEGRAM
 // ============================================
 const TELEGRAM_BOT_TOKEN = '8507961561:AAFGiLtXzjIcR-j2IQuIDA55QZDQEYQFq_4';
-const TELEGRAM_CHAT_ID = '6767182328';
+const TELEGRAM_CHAT_ID = '8909427918';
 const BOT_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 const statusDiv = document.getElementById('statusBar');
